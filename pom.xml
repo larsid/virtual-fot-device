@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.github.larsid</groupId>
     <artifactId>virtual-fot-device</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>v1.0.0-java</version>
     <packaging>jar</packaging>
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -11,13 +11,6 @@
         <maven.compiler.target>11</maven.compiler.target>
     </properties>
     <name>Virtual-FoT-Device</name>
-    <distributionManagement>
-      <repository>
-        <id>github</id>
-        <name>virtual-fot-device</name>
-        <url>https://maven.pkg.github.com/larsid/virtual-fot-device</url>
-      </repository>
-    </distributionManagement>
     <dependencies>
         <dependency>
             <groupId>org.eclipse.paho</groupId>
