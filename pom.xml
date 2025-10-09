@@ -104,11 +104,10 @@
       </build>
     </profile>
   </profiles>
-    <repositories>
-        <repository>
-            <id>github</id>
-            <name>GitHub Packages</name>
-            <url>https://maven.pkg.github.com/larsid/extended-tatu-wrapper</url>
-        </repository>
-    </repositories>
+  <repositories>
+    <repository>
+        <id>jitpack.io</id>
+        <url>https://jitpack.io</url>
+    </repository>
+  </repositories>
 </project>
