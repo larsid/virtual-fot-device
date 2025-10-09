@@ -108,7 +108,7 @@
         <repository>
             <id>github</id>
             <name>GitHub Packages</name>
-            <url>https://maven.pkg.github.com/larsid/virtual-fot-device</url>
+            <url>https://maven.pkg.github.com/larsid/extended-tatu-wrapper</url>
         </repository>
     </repositories>
 </project>
