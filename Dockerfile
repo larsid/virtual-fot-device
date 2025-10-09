@@ -28,7 +28,7 @@ WORKDIR /opt
 RUN apk add --no-cache bash tcpdump iperf busybox-extras iproute2 iputils
 
 # Copia o .jar final, construído no estágio 'builder', para a imagem final
-COPY --from=builder /app/target/virtual-fot-device-1.0-SNAPSHOT-jar-with-dependencies.jar /opt/device.jar
+COPY --from=builder /app/target/virtual-fot-device-*-jar-with-dependencies.jar /opt/device.jar
 
 # Define o comando para iniciar a aplicação
 ENTRYPOINT ["java", "-jar", "device.jar"]
