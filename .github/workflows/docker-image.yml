@@ -24,7 +24,7 @@ jobs:
       id: meta
       uses: docker/metadata-action@v5
       with:
-        images: larsid/virtual-fot-device-test
+        images: larsid/virtual-fot-device
 
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
