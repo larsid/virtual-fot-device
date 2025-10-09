@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.github.larsid</groupId>
     <artifactId>virtual-fot-device</artifactId>
-    <version>v1.0.0-beta</version>
+    <version>v1.1.0-test</version>
     <packaging>jar</packaging>
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
