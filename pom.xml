@@ -27,7 +27,7 @@
         <dependency>
             <groupId>com.github.larsid</groupId>
             <artifactId>extended-tatu-wrapper</artifactId>
-            <version>v1.0.0-java</version>
+            <version>main-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>
