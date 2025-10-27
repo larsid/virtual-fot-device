@@ -2,54 +2,30 @@ import threading
 import time
 import random
 import logging
-from dataclasses import dataclass, field
-#from typing import List, Optional, Any, Dict, Generic, TypeVar
-from util import tatu
-from mqtt.client import LatencyTrackingMqttClient
+from typing import Optional, List
+from extended_tatu_wrapper import Sensor  # Importa o Sensor oficial
+from extended_tatu_wrapper.utils import tatu_wrapper # Importa o wrapper oficial
 from controllers.persistense import MessageLogController
-from models.data import Data
-from typing import List, Optional, Any, Dict
+from mqtt.client import LatencyTrackingMqttClient
+from models.data import Data # Nosso modelo de dados continua o mesmo
+
 logger = logging.getLogger(__name__)
-#T = TypeVar('T')
-
-@dataclass(eq=False)
-class Sensor:
-    """Classe base para um sensor, baseada nos parâmetros do super() em FoTSensor.java"""
-    id: str
-    type: str
-    collection_time: int
-    publishing_time: int
-    min_value: int
-    max_value: int
-    delta: int
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Necessário para a serialização no CONNECT"""
-        return {
-            "id": self.id,
-            "type": self.type,
-            "collection_time": self.collection_time,
-            "publishing_time": self.publishing_time,
-            "min_value": self.min_value,
-            "max_value": self.max_value,
-            "delta": self.delta
-        }
-
-
 
 class FoTSensor(Sensor, threading.Thread):
     
     def __init__(self, device_id: str, base_sensor: Sensor):
+        # Inicializa a classe base 'Sensor' oficial
         Sensor.__init__(
             self,
-            base_sensor.id,
-            base_sensor.type,
-            base_sensor.collection_time,
-            base_sensor.publishing_time,
-            base_sensor.min_value,
-            base_sensor.max_value,
-            base_sensor.delta
+            id=base_sensor.id,
+            type=base_sensor.type,
+            collection_time=base_sensor.collection_time,
+            publishing_time=base_sensor.publishing_time,
+            min_value=base_sensor.min_value,
+            max_value=base_sensor.max_value,
+            delta=base_sensor.delta
         )
+        # Inicializa a classe base 'Thread'
         threading.Thread.__init__(self)
         
         self.device_id = device_id
@@ -62,7 +38,7 @@ class FoTSensor(Sensor, threading.Thread):
             if self.min_value <= self.max_value else 0
         
         self.name = f"FLOW/{self.device_id}/{self.id}" # Nome da Thread
-        self.daemon = True # Threads daemon são encerradas quando o principal termina
+        self.daemon = True 
 
     def set_publisher(self, publisher: LatencyTrackingMqttClient):
         self.publisher = publisher
@@ -83,16 +59,13 @@ class FoTSensor(Sensor, threading.Thread):
         temp_publish = self.publishing_time
         
         while temp_publish >= 0:
-            if self._stop_event.is_set(): # Verifica se a thread foi parada
+            if self._stop_event.is_set():
                 raise InterruptedException()
                 
             values.append(self.get_current_value())
             temp_publish -= self.collection_time
             
-            # Em Python, time.sleep() é bloqueante, mas como estamos em
-            # nossa própria thread, isso é aceitável.
-            # O 'wait' do Event permite ser interrompido.
-            self._stop_event.wait(self.collection_time / 1000.0) # Espera em segundos
+            self._stop_event.wait(self.collection_time / 1000.0) 
 
         return Data(self.device_id, self.id, values)
 
@@ -101,7 +74,8 @@ class FoTSensor(Sensor, threading.Thread):
             logger.error(f"Sensor {self.id} não pode iniciar o fluxo sem um publisher.")
             return
 
-        topic = tatu.build_tatu_response_topic(self.device_id)
+        # Usa a função oficial do wrapper
+        topic = tatu_wrapper.build_tatu_response_topic(self.device_id)
         self._flow = True
         self._running = True
         logger.info(f"Sensor {self.id} iniciando fluxo (Coleta: {self.collection_time}ms, Pub: {self.publishing_time}ms)")
@@ -110,7 +84,8 @@ class FoTSensor(Sensor, threading.Thread):
             try:
                 data = self._get_data_flow()
                 
-                msg = tatu.build_flow_message_response(
+                # Usa a função oficial do wrapper
+                msg = tatu_wrapper.build_flow_message_response(
                     self.device_id, self.id, self.publishing_time,
                     self.collection_time, data.values
                 )
@@ -138,38 +113,34 @@ class FoTSensor(Sensor, threading.Thread):
             self.stop_flow()
             return
 
-        if not self.is_alive(): # Verifica se a thread já foi iniciada
+        if not self.is_alive(): 
             self._stop_event.clear()
-            self.start() # Inicia a thread (chama o run())
+            self.start() 
         else:
-            # Se a thread já está rodando (talvez de um 'pause'), apenas reinicia
             self._stop_event.clear()
             self._flow = True
             logger.info(f"Sensor {self.id} resumindo fluxo.")
 
 
     def pause_flow(self):
-        """Interrompe a coleta de dados, mas mantém a thread viva."""
         if self.is_alive() and self._running:
             self._running = False
-            self._stop_event.set() # Sinaliza para o 'wait' parar
+            self._stop_event.set() 
 
     def stop_flow(self):
-        """Para permanentemente o fluxo e a thread."""
         if self.is_alive():
             self._flow = False
             self._running = False
-            self._stop_event.set() # Sinaliza para a thread parar
+            self._stop_event.set() 
             logger.info(f"Sinal de parada enviado para o sensor {self.id}")
 
 class InterruptedException(Exception):
-    """Exceção customizada para simular a InterruptedException do Java."""
     pass
 
 
 class _NullFoTSensor(FoTSensor):
-    """Implementação Singleton do NullFoTSensor"""
     def __init__(self):
+        # Cria um Sensor base oficial
         base_sensor = Sensor("NullSensor", "NullType", 0, 0, 0, 0, 0)
         super().__init__("NullDevice", base_sensor)
 
@@ -182,5 +153,4 @@ class _NullFoTSensor(FoTSensor):
     def pause_flow(self):
         pass
 
-# Instância Singleton, como em Java (NullFoTSensor.getInstance())
 NULL_FOT_SENSOR = _NullFoTSensor()

@@ -1,8 +1,9 @@
-from util import tatu
 import logging
 import random
 from typing import List, Optional
-from models.sensor import Sensor, FoTSensor
+from extended_tatu_wrapper import Device, Sensor # Importa o Device e Sensor oficiais
+from extended_tatu_wrapper.utils import tatu_wrapper # Importa o wrapper oficial
+from models.sensor import FoTSensor # Importa nosso FoTSensor (que herda de Sensor)
 from models.broker_settings import BrokerSettings
 from config import ExperimentConfig
 from mqtt.client import LatencyTrackingMqttClient
@@ -10,15 +11,20 @@ from mqtt.callbacks import DefaultFlowCallback
 
 logger = logging.getLogger(__name__)
 
-class FoTDevice:
+# Nossa classe FoTDevice agora herda da classe Device oficial
+class FoTDevice(Device):
     
     def __init__(self, name: str, sensors: List[Sensor], config: ExperimentConfig):
-        # Em Java, FoTDevice estende Device. Aqui, vamos compor.
-        self.id = name
-        self.name = name
-        self.longitude = random.uniform(-180.0, 180.0)
-        self.latitude = random.uniform(-90.0, 90.0)
+        # Inicializa a classe base 'Device' oficial
+        Device.__init__(
+            self,
+            id=name,
+            sensors=sensors,
+            latitude=random.uniform(-90.0, 90.0),
+            longitude=random.uniform(-180.0, 180.0)
+        )
         
+        # Converte os Sensores base em FoTSensores (que são Threads)
         self.fot_sensors = [FoTSensor(self.id, s) for s in sensors]
         self.config = config
         
@@ -27,14 +33,13 @@ class FoTDevice:
         
         self.is_updating: bool = False
 
-    def get_sensors(self) -> List[FoTSensor]:
+    def get_fot_sensors(self) -> List[FoTSensor]:
         return self.fot_sensors
         
-    def get_sensor_by_sensor_id(self, sensor_id: str) -> Optional[FoTSensor]:
-        for sensor in self.fot_sensors:
-            if sensor.id == sensor_id:
-                return sensor
-        return None
+    def get_fot_sensor_by_sensor_id(self, sensor_id: str) -> Optional[FoTSensor]:
+        # get_sensor_by_id() é herdado da classe Device oficial
+        fot_sensor = next((fs for fs in self.fot_sensors if fs.id == sensor_id), None)
+        return fot_sensor
 
     def start_flow(self):
         logger.info(f"Dispositivo {self.id}: iniciando fluxo para todos os sensores.")
@@ -56,16 +61,12 @@ class FoTDevice:
         return [s for s in self.fot_sensors if s.is_flow()]
 
     def connect(self, broker_settings: BrokerSettings):
-        """
-        Conecta o dispositivo ao broker MQTT.
-        """
         logger.info(f"Dispositivo {self.id} conectando a {broker_settings.uri}")
         
         client_id = f"{self.id}_CLIENT"
         self.client = LatencyTrackingMqttClient(client_id, broker_settings.url, self.config)
         self.broker_settings = broker_settings
 
-        # Configura os callbacks
         default_callback = DefaultFlowCallback(self, self.config)
         self.client.on_message = default_callback.on_message
         self.client.on_disconnect = default_callback.on_disconnect
@@ -77,12 +78,11 @@ class FoTDevice:
             self.client.connect(broker_settings.url, broker_settings.port)
             self.client.loop_start()
 
-            # Inscreve-se no tópico TATU
-            topic = tatu.build_tatu_topic(self.id)
+            # Usa a função oficial do wrapper
+            topic = tatu_wrapper.build_tatu_topic(self.id)
             self.client.subscribe(topic, qos=2)
             logger.info(f"Dispositivo {self.id} inscrito no tópico: {topic}")
 
-            # Define o publisher para os sensores
             for sensor in self.fot_sensors:
                 sensor.set_publisher(self.client)
 
@@ -93,9 +93,6 @@ class FoTDevice:
             raise
 
     def update_broker_settings(self, new_broker_settings: BrokerSettings):
-        """
-        Atualiza para um novo broker.
-        """
         logger.info(f"Dispositivo {self.id} atualizando para o broker: {new_broker_settings.uri}")
         old_broker_settings = self.broker_settings
         old_client = self.client
@@ -103,10 +100,8 @@ class FoTDevice:
         self.pause_flow()
         
         try:
-            # Conecta ao novo broker
             self.connect(new_broker_settings)
             
-            # Desconecta o cliente antigo APÓS conectar o novo
             if old_client:
                 logger.info(f"Desconectando do broker antigo: {old_broker_settings.uri}")
                 old_client.loop_stop()
@@ -115,7 +110,6 @@ class FoTDevice:
         except Exception as e:
             logger.error(f"Falha ao atualizar para o novo broker. Revertendo... {e}")
             if old_client and old_broker_settings:
-                # Tenta reconectar ao broker antigo
                 self.connect(old_broker_settings)
             else:
                 logger.critical("Falha ao reverter para o broker antigo. Estado inconsistente.")
