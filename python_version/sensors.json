@@ -1,0 +1,38 @@
+[
+    {
+        "id": "temperatureSensor",
+        "type": "Thermometer",
+        "collection_time": 0,
+        "publishing_time": 0,
+        "min_value": 10,
+        "max_value": 20,
+        "delta": 1
+    },
+    {
+        "id": "humiditySensor",
+        "type": "HumiditySensor",
+        "collection_time": 0,
+        "publishing_time": 0,
+        "min_value": 20,
+        "max_value": 30,
+        "delta": 2
+    },
+    {
+        "id": "pulseOxymeter",
+        "type": "PulseOxymeter",
+        "collection_time": 0,
+        "publishing_time": 0,
+        "min_value": 40,
+        "max_value": 50,
+        "delta": 3
+    },
+    {
+        "id": "windDirectionSensor",
+        "type": "WindDirectionSensor",
+        "collection_time": 0,
+        "publishing_time": 0,
+        "min_value": 60,
+        "max_value": 70,
+        "delta": 4
+    }
+]
