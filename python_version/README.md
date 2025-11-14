@@ -27,7 +27,7 @@ A configuração do dispositivo é feita via variáveis de ambiente passadas par
 | `PORT` | Porta do broker MQTT. | `1883` |
 | `USERNAME` | Usuário para autenticação no broker. | `karaf` |
 | `PASSWORD` | Senha para autenticação no broker. | `karaf` |
-| `FOGBED_IP` | **(Importante para Simulações)** O IP que o dispositivo deve reportar no `CONNECT`. | IP interno do container (`socket.gethostname()`) |
+| `BIND_IP` | **(Importante para Simulações)** O IP que o dispositivo deve reportar no `CONNECT`. | IP interno do container (`socket.gethostname()`) |
 | `API_URL` | URL da API para onde os logs de latência (RTT) são enviados. | `http://localhost:8080/api/latency-records/records` |
 
 ### Passo 3: Execução do Container
@@ -40,7 +40,7 @@ docker run --rm -it \
   -e BROKER_IP="127.0.0.1" \
   -e USERNAME="karaf" \
   -e PASSWORD="karaf" \
-  -e FOGBED_IP="10.0.0.5" \
+  -e BIND_IP="10.0.0.5" \
   --name "py_device_01" \
   virtual-fot-device-python
 ```

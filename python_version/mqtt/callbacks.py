@@ -3,8 +3,8 @@ import logging
 import json
 import threading
 import socket
+import os  # <-- Importar 'os'
 from typing import TYPE_CHECKING, Optional, Any, Dict
-import os
 
 # Imports do Wrapper Oficial
 from extended_tatu_wrapper import TATUMessage, ExtendedTATUMethods
@@ -143,19 +143,19 @@ class BrokerUpdateCallback:
         self._is_initial_connection = False
 
     def _get_ip_address(self) -> str:
-        # 1. Prioriza a variável de ambiente FOGBED_IP
-        fogbed_ip = os.getenv("FOGBED_IP")
-        if fogbed_ip:
-            logger.info(f"Usando IP da variável de ambiente FOGBED_IP: {fogbed_ip}")
-            return fogbed_ip
-
+        # 1. Prioriza a variável de ambiente BIND_IP
+        bind_ip = os.getenv("BIND_IP")
+        if bind_ip:
+            logger.info(f"Usando IP da variável de ambiente BIND_IP: {bind_ip}")
+            return bind_ip
+        
         # 2. Se não definida, tenta o método padrão (fallback)
         try:
             default_ip = socket.gethostbyname(socket.gethostname())
-            logger.info(f"Variável FOGBED_IP não definida. Usando IP padrão: {default_ip}")
+            logger.info(f"Variável BIND_IP não definida. Usando IP padrão: {default_ip}")
             return default_ip
         except socket.gaierror:
-            logger.warning("Não foi possível obter o IP via gethostname e FOGBED_IP não definida. Retornando UNKNOWN_HOST.")
+            logger.warning("Não foi possível obter o IP via gethostname e BIND_IP não definida. Retornando UNKNOWN_HOST.")
             return "UNKNOWN_HOST"
 
     def start_update_broker(self, timeout: float = 10.0, is_initial_connection: bool = False):
