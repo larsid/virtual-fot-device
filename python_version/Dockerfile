@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     busybox \
     iproute2 \
     iputils-ping \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Define o diretório de trabalho DENTRO do container
@@ -21,6 +22,13 @@ COPY requirements.txt .
 
 # Instala as dependências
 RUN pip install --no-cache-dir -r requirements.txt
+
+# --- INSTALAÇÃO DO TATU WRAPPER (Via GitHub) ---
+# Clona o repositório, instala a partir da pasta 'python-version' e remove os arquivos temporários
+RUN git clone https://github.com/larsid/extended-tatu-wrapper.git /tmp/tatu-wrapper \
+    && pip install /tmp/tatu-wrapper/python-version \
+    && rm -rf /tmp/tatu-wrapper
+
 
 # Copia TODOS os seus arquivos (.py, .json, pastas)
 # para o diretório de trabalho /opt/app

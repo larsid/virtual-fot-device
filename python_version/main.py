@@ -4,12 +4,13 @@ import logging
 import time
 from pathlib import Path
 from typing import List
-from extended_tatu_wrapper import Sensor # Importa o Sensor oficial
-from extended_tatu_wrapper.utils import sensor_wrapper # Importa o wrapper oficial
+from extended_tatu_wrapper import Sensor 
+from extended_tatu_wrapper.utils import sensor_wrapper 
 from models.device import FoTDevice
 from models.broker_settings import BrokerSettingsBuilder
 from config import DeviceConfig, ExperimentConfig
-from mqtt.callbacks import BrokerUpdateCallback
+# --- MUDANÇA 1: Importar DefaultFlowCallback ---
+from mqtt.callbacks import BrokerUpdateCallback, DefaultFlowCallback
 from controllers.persistense import MessageLogController
 from controllers.api_controller import LatencyApiController
 
@@ -17,17 +18,11 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 def read_sensors_from_file(file_name: str) -> List[Sensor]:
-    """
-    Lê a definição dos sensores do arquivo JSON usando o wrapper oficial.
-    """
     try:
         json_path = Path(__file__).parent / file_name
         with json_path.open('r', encoding='utf-8') as f:
             sensors_data = json.load(f)
-            
-        # Usa a função oficial do wrapper para converter o JSON
         return sensor_wrapper.get_all_sensors(sensors_data)
-        
     except FileNotFoundError:
         logger.error(f"Arquivo de sensores '{file_name}' não encontrado em {json_path}")
         return []
@@ -54,7 +49,6 @@ def main():
     api_controller = LatencyApiController(exp_config)
     api_controller.start()
 
-    # Lê os sensores usando a nova função
     sensors = read_sensors_from_file("sensors.json")
     if not sensors:
         logger.critical("Nenhum sensor carregado. Encerrando.")
@@ -72,14 +66,18 @@ def main():
 
     logger.info(f"Configurações iniciais do Broker: {initial_broker_settings}")
     
+    # --- MUDANÇA 2: Criar o handler de fluxo ---
+    # Este objeto sabe como processar mensagens GET/FLOW/SET
+    flow_handler = DefaultFlowCallback(device, exp_config)
+
     initial_conn_callback = BrokerUpdateCallback(
         device, 
         exp_config, 
-        initial_broker_settings
+        initial_broker_settings,
+        flow_handler=flow_handler  # --- MUDANÇA 3: Passar o handler aqui! ---
     )
     
-    timeout = 10.0 
-    initial_conn_callback.start_update_broker(timeout, is_initial_connection=True)
+    initial_conn_callback.start_update_broker(timeout=dev_config.timeout, is_initial_connection=True)
 
     try:
         while True:

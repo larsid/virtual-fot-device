@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 class FoTSensor(Sensor, threading.Thread):
     
     def __init__(self, device_id: str, base_sensor: Sensor):
-        # Inicializa a classe base 'Sensor' oficial
+        # 1. Inicializa os dados do Sensor (define self.id, etc.)
         Sensor.__init__(
             self,
             id=base_sensor.id,
@@ -25,10 +25,13 @@ class FoTSensor(Sensor, threading.Thread):
             max_value=base_sensor.max_value,
             delta=base_sensor.delta
         )
-        # Inicializa a classe base 'Thread'
+        
+        # 2. Define o device_id AGORA (antes de iniciar a Thread)
+        self.device_id = device_id
+        
+        # 3. Inicializa a Thread (agora o __hash__ vai funcionar)
         threading.Thread.__init__(self)
         
-        self.device_id = device_id
         self._flow = False
         self._running = False
         self.publisher: Optional[LatencyTrackingMqttClient] = None
@@ -39,6 +42,10 @@ class FoTSensor(Sensor, threading.Thread):
         
         self.name = f"FLOW/{self.device_id}/{self.id}" # Nome da Thread
         self.daemon = True 
+
+    # --- O método __hash__ que você adicionou ---
+    def __hash__(self):
+        return hash((self.device_id, self.id))
 
     def set_publisher(self, publisher: LatencyTrackingMqttClient):
         self.publisher = publisher
@@ -141,7 +148,7 @@ class InterruptedException(Exception):
 class _NullFoTSensor(FoTSensor):
     def __init__(self):
         # Cria um Sensor base oficial
-        base_sensor = Sensor("NullSensor", "NullType", 0, 0, 0, 0, 0)
+        base_sensor = Sensor(id="NullSensor", type="NullType", collection_time=0, publishing_time=0, min_value=0, max_value=0, delta=0)
         super().__init__("NullDevice", base_sensor)
 
     def start_flow(self, new_collect: int = -1, new_publish: int = -1):

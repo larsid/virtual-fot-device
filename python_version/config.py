@@ -15,6 +15,7 @@ class DeviceConfig:
     username: str
     password: str
     exp_num: int
+    timeout: float
 
     @staticmethod
     def load() -> 'DeviceConfig':
@@ -24,9 +25,10 @@ class DeviceConfig:
         username = os.getenv("USERNAME", "karaf")
         password = os.getenv("PASSWORD", "karaf")
         exp_num = int(os.getenv("EXP_NUM", "0"))
+        timeout = float(os.getenv("CONNECTION_TIMEOUT", "10.0"))
 
-        logger.info(f"Loaded DeviceConfig: DeviceId={device_id}, BrokerIp={broker_ip}, Port={port}, ExpNum={exp_num}")
-        return DeviceConfig(device_id, broker_ip, port, username, password, exp_num)
+        logger.info(f"Loaded DeviceConfig: DeviceId={device_id}, BrokerIp={broker_ip}, Port={port}, ExpNum={exp_num}, Timeout={timeout}")
+        return DeviceConfig(device_id, broker_ip, port, username, password, exp_num, timeout)
 
 @dataclass
 class ExperimentConfig:

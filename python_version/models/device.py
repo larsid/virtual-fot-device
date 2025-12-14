@@ -75,6 +75,14 @@ class FoTDevice(Device):
             self.client.username_pw_set(broker_settings.username, broker_settings.password)
 
         try:
+            # --- MUDANÇA AQUI ---
+            # Atribui o publisher aos sensores ANTES de conectar.
+            # Assim, se um FLOW chegar via cliente temporário, o sensor já tem
+            # onde publicar (mesmo que fique na fila até conectar).
+            for sensor in self.fot_sensors:
+                sensor.set_publisher(self.client)
+            # --------------------
+
             self.client.connect(broker_settings.url, broker_settings.port)
             self.client.loop_start()
 
@@ -82,9 +90,6 @@ class FoTDevice(Device):
             topic = tatu_wrapper.build_tatu_topic(self.id)
             self.client.subscribe(topic, qos=2)
             logger.info(f"Dispositivo {self.id} inscrito no tópico: {topic}")
-
-            for sensor in self.fot_sensors:
-                sensor.set_publisher(self.client)
 
         except Exception as e:
             logger.error(f"Falha ao conectar o dispositivo {self.id}: {e}", exc_info=True)
