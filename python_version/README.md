@@ -28,6 +28,7 @@ A configuração do dispositivo é feita via variáveis de ambiente passadas par
 | `USERNAME` | Usuário para autenticação no broker. | `karaf` |
 | `PASSWORD` | Senha para autenticação no broker. | `karaf` |
 | `BIND_IP` | **(Importante para Simulações)** O IP que o dispositivo deve reportar no `CONNECT`. | IP interno do container (`socket.gethostname()`) |
+| `CONNECTION_TIMEOUT` | Indica o tempo do timeout de espera para o gateway permitir a conexão do device, caso seja 0 o timeout não funcionará e o device fica em espera continua. | 10 segundos de timeout |
 | `API_URL` | URL da API para onde os logs de latência (RTT) são enviados. | `http://localhost:8080/api/latency-records/records` |
 
 ### Passo 3: Execução do Container
@@ -41,6 +42,7 @@ docker run --rm -it \
   -e USERNAME="karaf" \
   -e PASSWORD="karaf" \
   -e BIND_IP="10.0.0.5" \
+  -e CONNECTION_TIMEOUT=0 \
   --name "py_device_01" \
   virtual-fot-device-python
 ```
