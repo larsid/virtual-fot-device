@@ -11,6 +11,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     busybox \
     iproute2 \
     iputils-ping \
+    net-tools \
+    iproute2 \
+    ethtool \
     git \
     && rm -rf /var/lib/apt/lists/*
 
