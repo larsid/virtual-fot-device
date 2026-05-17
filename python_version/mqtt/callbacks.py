@@ -4,7 +4,7 @@ import json
 import threading
 import socket
 import os
-import time  # <--- IMPORTANTE: Adicione o import time aqui
+import time  
 from typing import TYPE_CHECKING, Optional, Any, Dict
 
 # ... (Imports do Wrapper continuam iguais)
@@ -155,6 +155,11 @@ class BrokerUpdateCallback:
         self.timeout_timer: Optional[threading.Timer] = None
         self.ip_address = self._get_ip_address()
         self._is_initial_connection = False
+        
+        # Variáveis de Exponential Backoff
+        self.base_timeout = 10.0
+        self.current_timeout = 10.0
+        self.max_timeout = 60.0 # Tempo máximo de espera entre tentativas
 
     def _get_ip_address(self) -> str:
         bind_ip = os.getenv("BIND_IP")
@@ -173,6 +178,10 @@ class BrokerUpdateCallback:
         self.device.is_updating = True
         self._is_initial_connection = is_initial_connection
         
+        # Usa o timeout definido na variável de ambiente como base
+        self.base_timeout = timeout if timeout > 0 else 10.0
+        self.current_timeout = self.base_timeout
+        
         try:
             client_id = f"{self.device.id}_CLIENT_UPDATE"
             self.new_client = mqtt.Client(client_id=client_id)
@@ -184,14 +193,21 @@ class BrokerUpdateCallback:
             if self.new_broker_settings.username and self.new_broker_settings.password:
                 self.new_client.username_pw_set(self.new_broker_settings.username, self.new_broker_settings.password)
             
-            self.new_client.connect(self.new_broker_settings.url, self.new_broker_settings.port)
-            self.new_client.loop_start()
+            # ==========================================================
+            # LOOP DE RESILIÊNCIA: Conexão do Cliente Temporário
+            # ==========================================================
+            connected = False
+            while not connected and self.device.is_updating:
+                try:
+                    self.new_client.connect(self.new_broker_settings.url, self.new_broker_settings.port)
+                    connected = True
+                except Exception as e:
+                    logger.warning(f"Broker temporário indisponível ({self.new_broker_settings.uri}). Retentando em 5s... Erro: {e}")
+                    time.sleep(5)
+            # ==========================================================
 
-            if timeout and timeout > 0:
-                self.timeout_timer = threading.Timer(timeout, self._on_timeout)
-                self.timeout_timer.start()
-            elif is_initial_connection:
-                logger.info("Aguardando CONNACK (Timeout infinito)...")
+            if connected:
+                self.new_client.loop_start()
 
         except Exception as e:
             logger.error(f"Falha na conexão update: {e}", exc_info=True)
@@ -203,55 +219,66 @@ class BrokerUpdateCallback:
         if rc == 0:
             logger.info(f"Conectado temporariamente a {self.new_broker_settings.uri}")
             try:
-                # Inscreve nos tópicos. QoS 1 para garantir entrega.
                 connack_topic = extended_tatu_wrapper.get_connection_topic_response()
                 device_topic = tatu_wrapper.build_tatu_topic(self.device.id)
                 
-                # Inscreve em ambos de uma vez
                 client.subscribe([(connack_topic, 1), (device_topic, 1)])
                 logger.info(f"Inscrito em {connack_topic} e {device_topic}")
-                
-                # Aguarda um pouco para garantir que a subscrição propagou no broker (Hack para redes lentas)
                 time.sleep(0.5) 
-
-                connect_topic = extended_tatu_wrapper.get_connection_topic()
-                connect_msg = extended_tatu_wrapper.build_connect_message(self.device, self.ip_address, 10.0)
-                client.publish(connect_topic, connect_msg, qos=1)
-                logger.info("Mensagem CONNECT enviada.")
+                
+                # Inicia o ciclo de disparo do CONNECT
+                self._send_connect_and_schedule_timeout()
                 
             except Exception as e:
                 logger.error(f"Erro no handshake: {e}", exc_info=True)
                 self._cleanup_new_client()
         else:
             logger.error(f"Falha na conexão temporária (rc: {rc})")
-            self.device.is_updating = False
-            if not self._is_initial_connection:
-                 self._cleanup_new_client() 
+
+    # ==========================================================
+    # LÓGICA DO BACKOFF E RETENTATIVA DO HANDSHAKE
+    # ==========================================================
+    def _send_connect_and_schedule_timeout(self):
+        try:
+            connect_topic = extended_tatu_wrapper.get_connection_topic()
+            connect_msg = extended_tatu_wrapper.build_connect_message(self.device, self.ip_address, self.current_timeout)
+            
+            self.new_client.publish(connect_topic, connect_msg, qos=1)
+            logger.info(f"Mensagem CONNECT enviada. Aguardando CONNACK por {self.current_timeout}s...")
+            
+            if self.timeout_timer:
+                self.timeout_timer.cancel()
+            
+            self.timeout_timer = threading.Timer(self.current_timeout, self._on_timeout)
+            self.timeout_timer.start()
+            
+        except Exception as e:
+            logger.error(f"Erro ao enviar CONNECT: {e}")
+
+    def _on_timeout(self):
+        logger.warning(f"Timeout! Sem resposta do Gateway. Reenviando CONNECT...")
+        
+        # Exponential backoff: Dobra o tempo de espera até o limite máximo
+        self.current_timeout = min(self.current_timeout * 2, self.max_timeout)
+        
+        # Dispara de novo
+        self._send_connect_and_schedule_timeout()
+    # ==========================================================
 
     def _on_generic_message(self, client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage):
-        """Roteia mensagens recebidas pelo cliente temporário."""
         topic = msg.topic
-        payload = msg.payload.decode('utf-8') # Decode aqui para logar
+        payload = msg.payload.decode('utf-8')
         
-        logger.info(f"[CLIENTE TEMP] Msg recebida em {topic}: {payload}") # LOG IMPORTANTE
-
         connack_topic = extended_tatu_wrapper.get_connection_topic_response()
         
         if topic == connack_topic:
             self._handle_connack(client, msg)
         else:
-            # Se receber qualquer outra coisa, assume que é para o dispositivo
             if self.flow_handler:
-                logger.info("Repassando mensagem para o handler principal...")
                 self.flow_handler._process_message(client, msg)
 
     def _handle_connack(self, client: mqtt.Client, msg: mqtt.MQTTMessage):
-        if self.timeout_timer:
-            self.timeout_timer.cancel()
-        
         payload = msg.payload.decode('utf-8')
-        logger.info(f"Recebido CONNACK: {payload}")
-        
         tatu_msg = TATUMessage(payload)
         
         if tatu_msg.method != ExtendedTATUMethods.CONNACK:
@@ -259,11 +286,25 @@ class BrokerUpdateCallback:
 
         try:
             connack_data = json.loads(tatu_msg.content)
+            
+            
+            # Pega o nome do dispositivo que o Gateway está aprovando
+            target_device = connack_data.get("BODY", {}).get("NEW_NAME", "")
+            
+            # Se a aprovação não for para ESTE dispositivo, ignora a mensagem silenciosamente
+            if target_device != self.device.id:
+                return
+            
+            
+            # Se chegou aqui, é porque o CONNACK é realmente para ele!
+            if self.timeout_timer:
+                self.timeout_timer.cancel()
+                
+            logger.info(f"Recebido CONNACK destinado a mim: {payload}")
             can_connect = connack_data.get("BODY", {}).get("CAN_CONNECT", False)
             
             if can_connect:
                 logger.info("Conexão APROVADA. Iniciando transição de cliente...")
-                # Executa a troca em Thread separada
                 threading.Thread(target=self._perform_switch).start()
             else:
                 logger.warning("Conexão NEGADA.")
@@ -276,32 +317,17 @@ class BrokerUpdateCallback:
             self._cleanup_new_client()
 
     def _perform_switch(self):
-        """Realiza a troca de clientes sem bloquear o recebimento de mensagens."""
         try:
-            # Conecta o cliente principal
             self.device.update_broker_settings(self.new_broker_settings)
             
-            # --- CORREÇÃO DE RACE CONDITION ---
-            # Espera 5 segundos antes de desligar o cliente temporário.
-            # Isso garante que se o gateway enviar o FLOW agora, o temporário
-            # ainda estará vivo para receber e processar.
             logger.info("Cliente principal conectado. Mantendo cliente temporário por 5s para overlap...")
             time.sleep(5)
-            # ----------------------------------
             
         except Exception as e:
             logger.error(f"Erro na transição: {e}")
         finally:
             logger.info("Transição concluída. Encerrando cliente temporário.")
             self._cleanup_new_client()
-
-    def _on_timeout(self):
-        logger.warning("Timeout CONNACK.")
-        self.device.is_updating = False
-        self._cleanup_new_client()
-        
-        if self._is_initial_connection:
-            logger.critical("Falha crítica: Sem resposta do Gateway.")
 
     def _on_disconnect_new_broker(self, client: mqtt.Client, userdata: Any, rc: int):
         logger.info(f"Cliente temporário desconectado (rc: {rc})")

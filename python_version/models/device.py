@@ -75,15 +75,22 @@ class FoTDevice(Device):
             self.client.username_pw_set(broker_settings.username, broker_settings.password)
 
         try:
-            # --- MUDANÇA AQUI ---
             # Atribui o publisher aos sensores ANTES de conectar.
             # Assim, se um FLOW chegar via cliente temporário, o sensor já tem
             # onde publicar (mesmo que fique na fila até conectar).
             for sensor in self.fot_sensors:
                 sensor.set_publisher(self.client)
-            # --------------------
+            
+            connected = False
+            while not connected:
+                try:
+                    self.client.connect(broker_settings.url, broker_settings.port)
+                    connected = True
+                except Exception as e:
+                    logger.warning(f"Broker principal indisponível ({broker_settings.uri}). Retentando em 5s... Erro: {e}")
+                    import time
+                    time.sleep(5)
 
-            self.client.connect(broker_settings.url, broker_settings.port)
             self.client.loop_start()
 
             # Usa a função oficial do wrapper
