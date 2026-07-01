@@ -65,7 +65,7 @@ class FoTSensor(Sensor, threading.Thread):
         values: List[int] = []
         temp_publish = self.publishing_time
         
-        while temp_publish >= 0:
+        while temp_publish > 0:
             if self._stop_event.is_set():
                 raise InterruptedException()
                 
@@ -77,62 +77,62 @@ class FoTSensor(Sensor, threading.Thread):
         return Data(self.device_id, self.id, values)
 
     def run(self):
-        if not self.publisher:
-            logger.error(f"Sensor {self.id} não pode iniciar o fluxo sem um publisher.")
-            return
-
-        # Usa a função oficial do wrapper
-        topic = tatu_wrapper.build_tatu_response_topic(self.device_id)
-        self._flow = True
         self._running = True
-        logger.info(f"Sensor {self.id} iniciando fluxo (Coleta: {self.collection_time}ms, Pub: {self.publishing_time}ms)")
+        logger.info(f"Thread do Sensor {self.id} iniciada e aguardando comandos.")
 
-        while not self._stop_event.is_set() and self._flow:
-            try:
-                data = self._get_data_flow()
-                
-                # Usa a função oficial do wrapper
-                msg = tatu_wrapper.build_flow_message_response(
-                    self.device_id, self.id, self.publishing_time,
-                    self.collection_time, data.values
-                )
-                
-                self.publisher.publish_and_track(topic, self.id, msg)
-                MessageLogController.get_instance().put_data(data)
-                
-            except InterruptedException:
-                logger.info(f"Fluxo interrompido para o sensor {self.id}")
-                self._running = False
-            except Exception as e:
-                logger.error(f"Erro no fluxo do sensor {self.id}: {e}", exc_info=True)
-                self._running = False
+        while self._running:
+            if self._flow:
+                # Se o publisher ainda não foi injetado (overlap de conexão), a thread não morre, apenas espera!
+                if not self.publisher:
+                    logger.warning(f"Sensor {self.id} aguardando publisher...")
+                    time.sleep(1)
+                    continue
+
+                try:
+                    data = self._get_data_flow()
+                    msg = tatu_wrapper.build_flow_message_response(
+                        self.device_id, self.id, self.publishing_time,
+                        self.collection_time, data.values
+                    )
+                    topic = tatu_wrapper.build_tatu_response_topic(self.device_id)
+                    self.publisher.publish_and_track(topic, self.id, msg)
+                    MessageLogController.get_instance().put_data(data)
+                except InterruptedException:
+                    logger.info(f"Fluxo pausado para o sensor {self.id}")
+                except Exception as e:
+                    logger.error(f"Erro no fluxo do sensor {self.id}: {e}", exc_info=True)
+            else:
+                # MODO HIBERNAÇÃO: Karaf mandou 0,0 ou mandou parar. A thread dorme, mas continua viva.
+                time.sleep(0.5)
         
-        self._running = False
-        self._flow = False
-        logger.info(f"Sensor {self.id} parou o fluxo.")
+        logger.info(f"Sensor {self.id} desligado definitivamente.")
 
     def start_flow(self, new_collect: int = -1, new_publish: int = -1):
         if new_collect >= 1 and new_publish >= 1:
             self.collection_time = new_collect
             self.publishing_time = new_publish
         elif self.collection_time <= 0 or self.publishing_time <= 0:
-            logger.warning(f"Sensor {self.id} não pode iniciar o fluxo com tempos <= 0")
+            logger.warning(f"Sensor {self.id} recebeu fluxo 0, entrando em modo de pausa.")
             self.stop_flow()
             return
 
+        self._stop_event.clear()
+        self._flow = True
+        
         if not self.is_alive(): 
-            self._stop_event.clear()
-            self.start() 
+            try:
+                self.start() 
+            except RuntimeError:
+                logger.error(f"Tentativa de reiniciar thread morta no sensor {self.id}")
         else:
-            self._stop_event.clear()
-            self._flow = True
-            logger.info(f"Sensor {self.id} resumindo fluxo.")
+            logger.info(f"Sensor {self.id} resumindo fluxo existente.")
 
 
     def pause_flow(self):
         if self.is_alive() and self._running:
-            self._running = False
+            self._flow = False # APENAS ENTRA EM HIBERNAÇÃO (A thread continua viva!)
             self._stop_event.set() 
+            logger.info(f"Sinal de pausa (hibernação) acionado para o sensor {self.id}")
 
     def stop_flow(self):
         if self.is_alive():

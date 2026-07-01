@@ -44,10 +44,12 @@ class LatencyApiController(threading.Thread):
         self.buffer: Queue[Optional[LatencyRecord]] = Queue()
         self.buffer_size = config.buffer_size
         self.stop_event = threading.Event()
+        self.is_enabled = config.enable_latency_tracker
 
     def put_latency_record(self, record: LatencyRecord):
-        self.buffer.put(record)
-    
+        if self.is_enabled:
+            self.buffer.put(record)
+
     def stop(self):
         self.stop_event.set()
         self.buffer.put(None) # Sinal de parada

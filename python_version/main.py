@@ -49,6 +49,12 @@ def main():
     api_controller = LatencyApiController(exp_config)
     api_controller.start()
 
+    if exp_config.enable_latency_tracker:
+        logger.info(f"Tracker de Latência ATIVADO. Enviando logs para: {exp_config.api_url}")
+        api_controller.start()
+    else:
+        logger.info("Tracker de Latência DESATIVADO via env (ENABLE_LATENCY_TRACKER=False). Consumo de RAM otimizado.")
+
     sensors = read_sensors_from_file("sensors.json")
     if not sensors:
         logger.critical("Nenhum sensor carregado. Encerrando.")
@@ -93,6 +99,12 @@ def main():
             MessageLogController.get_instance().stop()
         api_controller.stop()
         
+        if activate_persistence:
+            MessageLogController.get_instance().stop()
+            
+        if exp_config.enable_latency_tracker:
+            api_controller.stop()
+
         logger.info("Virtual FoT Device encerrado.")
 
 if __name__ == "__main__":

@@ -37,15 +37,18 @@ class ExperimentConfig:
     exp_num: int
     exp_type: int
     exp_level: int
+    enable_latency_tracker: bool
 
     @staticmethod
     def load() -> 'ExperimentConfig':
-        api_url = os.getenv("API_URL", "http://localhost:8080/api/latency-records/records")
+        api_url = os.getenv("LATENCY_API_URL", "http://localhost:8080/api/latency-records/records")
         buffer_size = int(os.getenv("BUFFER_SIZE", "64"))
         exp_num = int(os.getenv("EXP_NUM", "0"))
         exp_type = int(os.getenv("EXP_TYPE", "0"))
         exp_level = int(os.getenv("EXP_LEVEL", "0"))
+        enable_tracker_str = os.getenv("ENABLE_LATENCY_TRACKER", "False").strip().lower()
+        enable_latency_tracker = enable_tracker_str in ("true", "1", "yes")
         
-        config = ExperimentConfig(api_url, buffer_size, exp_num, exp_type, exp_level)
+        config = ExperimentConfig(api_url, buffer_size, exp_num, exp_type, exp_level, enable_latency_tracker)
         logger.info(f"Loaded {config}")
         return config
